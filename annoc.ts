@@ -35,6 +35,36 @@ if(errors && errors.length>0) console.error(errors);
 
 var foo: any = {};
 
+function emitType(type: ts.Type, checker: any): string {
+	var txt: string;
+
+	if(type.flags & ts.TypeFlags.Intrinsic) {
+		if(type.flags & ts.TypeFlags.Any) return('*');
+		return((<ts.IntrinsicType>type).intrinsicName);
+	}
+
+	if(type.flags & ts.TypeFlags.StringLiteral) return('string');
+
+	if(type.flags & ts.TypeFlags.Reference) {
+		var refType = <ts.TypeReference>type;
+		if(refType.target.symbol.name == 'Array') {
+			return('Array.<' + emitType(refType.typeArguments[0], checker) + '>');
+		} else return(emitType(refType.typeArguments[0], checker));
+	}
+
+	if(type.flags & (ts.TypeFlags.Enum | ts.TypeFlags.Class | ts.TypeFlags.Interface)) {
+		return(type.symbol.name);
+	}
+
+    if (type.flags & ts.TypeFlags.Union) {
+		return('(' + (<ts.UnionType>type).types.map((type) => emitType(type, checker)).join('|') + ')');
+    }
+
+	console.error('Unimplemented type ' + type.flags + '\t' + checker.typeToString(type));
+
+	return(type.flags + '?');
+}
+
 function annotateClassMembers(classDecl: ts.ClassDeclaration, checker: any) {
 	var memberTbl = classDecl.symbol.members;
 	var content = Object.keys(memberTbl).map((key) => {
@@ -44,7 +74,7 @@ function annotateClassMembers(classDecl: ts.ClassDeclaration, checker: any) {
 			var type = checker.getTypeAtLocation(propDecl.type);
 
 			return(
-				'/** @type {' + checker.typeToString(type) + '} */\n' +
+				'/** @type {' + emitType(type, checker) + '} */\n' +
 				'__DECLARE__(\'' + key + '\');'
 			);
 		}
@@ -60,7 +90,7 @@ function annotateParameters(signatureDecl: ts.SignatureDeclaration, checker: any
 
 		return(
 			'  * @param {' +
-			checker.typeToString(type) +
+			emitType(type, checker) +
 			'} ' + (<ts.Identifier>param.name).text
 		);
 	}).join('\n');
@@ -77,8 +107,24 @@ function annotate(node: ts.Node) {
 		var content: string;
 
 		switch(node.kind) {
+			case ts.SyntaxKind.FunctionDeclaration:
+				var functionDecl = <ts.FunctionDeclaration>node.symbol.declarations[0];
+				var type = checker.getReturnTypeOfSignature(checker.getSignatureFromDeclaration(functionDecl));
+
+				content = '/** @returns {';
+				content += emitType(type, checker);
+				content += '}\n';
+				content += annotateParameters(functionDecl, checker);
+				content += ' */\n';
+
+				changeList.push({
+					pos: node.getStart(),
+					content: content
+				});
+
+				ts.forEachChild(node, parse);
+				break;
 			case ts.SyntaxKind.Constructor:
-				// checker.getTypeAtLocation(nd
 				var constructDecl = <ts.ConstructorDeclaration>node.symbol.declarations[0];
 
 				content = '/** @constructor\n';
@@ -90,10 +136,19 @@ function annotate(node: ts.Node) {
 					content: content
 				});
 
-				changeList.push({
-					pos: constructDecl.body.getStart()+1,
-					content: '\n' + annotateClassMembers(classDecl, checker)
-				});
+				var bodyPos: number;
+
+				if(constructDecl.body) {
+					changeList.push({
+						pos: constructDecl.body.getStart() + 1,
+						content: '\n' + annotateClassMembers(classDecl, checker)
+					});
+				} else {
+					changeList.push({
+						pos: constructDecl.getEnd() - 1,
+						content: '{\n' + annotateClassMembers(classDecl, checker) + '}\n'
+					});
+				}
 
 				constructorFound = true;
 
@@ -104,7 +159,7 @@ function annotate(node: ts.Node) {
 				var type = checker.getReturnTypeOfSignature(checker.getSignatureFromDeclaration(methodDecl));
 
 				content = '/** @returns {';
-				content += checker.typeToString(type);
+				content += emitType(type, checker);
 				content += '}\n';
 
 				content += annotateParameters(methodDecl, checker);
@@ -121,8 +176,6 @@ function annotate(node: ts.Node) {
 				classDecl = <ts.ClassDeclaration>node.symbol.valueDeclaration;
 				var className = classDecl.name.text;
 
-//ts.NodeFlags.Public
-
 				changeList.push({
 					pos: node.getStart(),
 					content: '//__UNWRAPSTART__(' + className + ')\n'
@@ -132,6 +185,8 @@ function annotate(node: ts.Node) {
 					pos: node.getEnd(),
 					content: '//__UNWRAPEND__(' + className + ')\n'
 				});
+
+				constructorFound = false;
 
 				ts.forEachChild(node, parse);
 
@@ -147,8 +202,6 @@ function annotate(node: ts.Node) {
 
 				break;
 			default:
-//				console.log(node.symbol.getDocumentationComment());
-//				console.log((node.symbol?node.symbol.name:'')+'\t'+ts.SyntaxKind[node.kind]);
 				ts.forEachChild(node, parse);
 		}
 	}
