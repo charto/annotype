@@ -1,0 +1,7 @@
+/typings
+/node_modules
+annoc.d.ts
+annoc.js
+*.log
+
+! /typings/typescript/typescript.d.ts

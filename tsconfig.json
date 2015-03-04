@@ -1,0 +1,17 @@
+{
+	"compilerOptions": {
+		"declaration": true,
+		"module": "CommonJS",
+		"noImplicitAny": true,
+		"removeComments": true,
+		"target": "ES5"
+	},
+	"files": [
+		"annoc.ts"
+	],
+    "format": {
+		"indentSize": 4,
+        "tabSize": 4,
+        "newLineCharacter": "\n"
+    }
+}

@@ -1,0 +1,4 @@
+/typings
+*.log
+
+! /typings/typescript/typescript.d.ts

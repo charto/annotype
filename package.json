@@ -1,0 +1,25 @@
+{
+  "name": "annotype",
+  "version": "0.0.1",
+  "description": "Generate Closure Compiler annotations from TypeScript source",
+  "homepage": "https://github.com/charto/annotype",
+  "bugs": {
+    "url": "https://github.com/charto/annotype/issues"
+  },
+  "license": "MIT",
+  "author": "Juha Järvi",
+  "bin": {
+    "annoc": "./annoc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/charto/annotype.git"
+  },
+  "scripts": {
+    "prepublish": "tsd update && ./tsconfig-to-args.js | tsc --module commonjs @/dev/stdin"
+  },
+  "bundledDependencies": [ "typescript" ],
+  "devDependencies": {
+    "tsd": "~0.5.7"
+  }
+}
